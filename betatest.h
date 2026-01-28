@@ -58,7 +58,7 @@ static struct {
     int assertions_failed;
     int current_test_failed;
     char *current_test_name;
-} betatest_stats = {0, 0, 0, 0, 0, 0, 0};
+} betatest_stats = {0, 0, 0, 0, 0, 0, 0, 0};
 
 /* Print helpers */
 #define BETATEST_PRINT_PASS()                                                  \
