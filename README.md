@@ -14,9 +14,13 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 
 ## Quick Start
 
-1. Include the header in your test file:
+1. Set flags and include the header in your test file:
 
 ```c
+#define BETATEST_PRINT_ON_TEST
+#define BETATEST_PRINT_ON_PASS
+// #define BETATEST_NO_COLOR
+// #define BETATEST_PRINT_NOT_ON_FAIL
 #include "betatest.h"
 ```
 
@@ -24,7 +28,8 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 
 ```c
 TEST(my_test_name) {
-    ASSERT_INT_EQ(2 + 2, 4);
+    int a = 2 + 2;
+    ASSERT_INT_EQ(a, 4);
 }
 ```
 

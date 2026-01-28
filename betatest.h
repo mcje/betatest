@@ -13,6 +13,24 @@
 #define BETATEST_USE_COLOR 0
 #endif
 
+#ifndef BETATEST_PRINT_ON_TEST
+#define BETATEST_DO_PRINT_TEST 0
+#else
+#define BETATEST_DO_PRINT_TEST 1
+#endif
+
+#ifndef BETATEST_PRINT_ON_PASS
+#define BETATEST_DO_PRINT_PASS 0
+#else
+#define BETATEST_DO_PRINT_PASS 1
+#endif
+
+#ifndef BETATEST_PRINT_NOT_ON_FAIL
+#define BETATEST_DO_PRINT_FAIL 1
+#else
+#define BETATEST_DO_PRINT_FAIL 0
+#endif
+
 /* Color codes */
 #if BETATEST_USE_COLOR
 #define BETATEST_COLOR_GREEN "\033[32m"
@@ -39,6 +57,7 @@ static struct {
     int assertions_passed;
     int assertions_failed;
     int current_test_failed;
+    char *current_test_name;
 } betatest_stats = {0, 0, 0, 0, 0, 0, 0};
 
 /* Print helpers */
@@ -55,20 +74,30 @@ static struct {
 #define TEST(name)                                                             \
     static void test_##name(void);                                             \
     static void run_test_##name(void) {                                        \
+        betatest_stats.current_test_name = #name;                              \
         betatest_stats.tests_run++;                                            \
         betatest_stats.current_test_failed = 0;                                \
-        printf("%s%s[TEST]%s %s%s\n", BETATEST_COLOR_BOLD,                     \
-               BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET, #name,               \
-               BETATEST_COLOR_RESET);                                          \
+        int print_nl = 0;                                                      \
+        if (BETATEST_DO_PRINT_TEST) {                                          \
+            printf("%s%s[TEST]%s %s%s\n", BETATEST_COLOR_BOLD,                 \
+                   BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET, #name,           \
+                   BETATEST_COLOR_RESET);                                      \
+            print_nl = 1;                                                      \
+        }                                                                      \
         test_##name();                                                         \
         if (betatest_stats.current_test_failed) {                              \
             betatest_stats.tests_failed++;                                     \
         } else {                                                               \
             betatest_stats.tests_passed++;                                     \
-            BETATEST_PRINT_PASS();                                             \
-            printf("Test '%s' passed\n", #name);                               \
+            if (BETATEST_DO_PRINT_PASS) {                                      \
+                BETATEST_PRINT_PASS();                                         \
+                printf("%s\n", #name);                                         \
+                print_nl = 1;                                                  \
+            }                                                                  \
         }                                                                      \
-        printf("\n");                                                          \
+        if (print_nl) {                                                        \
+            printf("\n");                                                      \
+        }                                                                      \
     }                                                                          \
     static void test_##name(void)
 
@@ -86,9 +115,12 @@ static struct {
         betatest_stats.assertions_run++;                                       \
         betatest_stats.assertions_failed++;                                    \
         betatest_stats.current_test_failed = 1;                                \
-        BETATEST_PRINT_FAIL();                                                 \
-        printf(msg, ##__VA_ARGS__);                                            \
-        printf("\n       at %s:%d\n", __FILE__, __LINE__);                     \
+        if (BETATEST_DO_PRINT_FAIL) {                                          \
+            BETATEST_PRINT_FAIL();                                             \
+            printf("%s\n       ", betatest_stats.current_test_name);           \
+            printf(msg, ##__VA_ARGS__);                                        \
+            printf("\n       at %s:%d\n", __FILE__, __LINE__);                 \
+        }                                                                      \
     } while (0)
 
 /* Core assertion macros */
@@ -169,8 +201,8 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: integers not equal\n"      \
-                                 "       Expected: %s = %lld\n"                \
-                                 "       Got:      %s = %lld",                 \
+                                 "       Got:      %s = %lld\n"                \
+                                 "       Expected: %s = %lld",                 \
                                  #a, _a, #b, _b);                              \
         }                                                                      \
     } while (0)
@@ -206,8 +238,8 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: strings not equal\n"       \
-                                 "       Expected: %s = \"%s\"\n"              \
-                                 "       Got:      %s = \"%s\"",               \
+                                 "       Got:      %s = \"%s\"\n"              \
+                                 "       Expected: %s = \"%s\"\n",             \
                                  #s1, _s1, #s2, _s2);                          \
         }                                                                      \
     } while (0)
@@ -237,8 +269,8 @@ static struct {
         } else {                                                               \
             BETATEST_RECORD_FAIL(                                              \
                 "Assertion failed: floats not equal within epsilon\n"          \
-                "       Expected: %s = %.10g\n"                                \
                 "       Got:      %s = %.10g\n"                                \
+                "       Expected: %s = %.10g\n"                                \
                 "       Epsilon:  %.10g\n"                                     \
                 "       Diff:     %.10g",                                      \
                 #a, _a, #b, _b, _epsilon, fabs(_a - _b));                      \

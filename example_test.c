@@ -1,3 +1,7 @@
+#define BETATEST_PRINT_ON_TEST
+#define BETATEST_PRINT_ON_PASS
+// #define BETATEST_PRINT_NOT_ON_FAIL
+// #define BETATEST_NO_COLOR
 #include "betatest.h"
 
 /* Example function to test */
@@ -13,7 +17,7 @@ char *greet(const char *name) {
 
 /* Test cases */
 TEST(test_addition) {
-    ASSERT_INT_EQ(add(2, 3), 5);
+    ASSERT_INT_EQ(add(2, 3), 6);
     ASSERT_INT_EQ(add(-1, 1), 0);
     ASSERT_INT_EQ(add(0, 0), 0);
 }
