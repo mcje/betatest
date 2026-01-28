@@ -201,8 +201,8 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: integers not equal\n"      \
-                                 "       Got:      %s = %lld\n"                \
-                                 "       Expected: %s = %lld",                 \
+                                 "       1:  %s = %lld\n"                      \
+                                 "       2:  %s = %lld",                       \
                                  #a, _a, #b, _b);                              \
         }                                                                      \
     } while (0)
@@ -238,8 +238,8 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: strings not equal\n"       \
-                                 "       Got:      %s = \"%s\"\n"              \
-                                 "       Expected: %s = \"%s\"\n",             \
+                                 "       1:  %s = \"%s\"\n"                    \
+                                 "       2:  %s = \"%s\"\n",                   \
                                  #s1, _s1, #s2, _s2);                          \
         }                                                                      \
     } while (0)
