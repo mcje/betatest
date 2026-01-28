@@ -17,10 +17,6 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 1. Set flags and include the header in your test file:
 
 ```c
-#define BETATEST_PRINT_ON_TEST
-#define BETATEST_PRINT_ON_PASS
-// #define BETATEST_NO_COLOR
-// #define BETATEST_PRINT_NOT_ON_FAIL
 #include "betatest.h"
 ```
 
@@ -78,8 +74,25 @@ gcc -o test example_test.c -lm
 
 ### String Assertions
 
+#### Basic String Comparison
+
 - `ASSERT_STR_EQ(s1, s2)` - Assert strings are equal
 - `ASSERT_STR_NEQ(s1, s2)` - Assert strings are not equal
+
+#### Substring and Pattern Matching
+
+- `ASSERT_STR_CONTAINS(str, substr)` - Assert string contains substring
+- `ASSERT_STR_STARTS_WITH(str, prefix)` - Assert string starts with prefix
+- `ASSERT_STR_ENDS_WITH(str, suffix)` - Assert string ends with suffix
+
+#### Empty String Checks
+
+- `ASSERT_STR_EMPTY(str)` - Assert string is empty
+- `ASSERT_STR_NOT_EMPTY(str)` - Assert string is not empty
+
+#### Regular Expression Matching
+
+- `ASSERT_STR_MATCHES(str, pattern)` - Assert string matches regex pattern (POSIX ERE)
 
 ### Float/Double Assertions
 
@@ -113,8 +126,8 @@ int main(void) {
     RUN_TEST(test_addition);
     RUN_TEST(test_comparisons);
 
-    BETATEST_SUMMARY();
-    return BETATEST_RETURN_CODE();
+    TEST_SUMMARY();
+    return TEST_RETURN_CODE();
 }
 ```
 
@@ -127,16 +140,24 @@ int main(void) {
 
 ### Test Control
 
-- `BETATEST_SUMMARY()` - Print test summary with statistics
-- `BETATEST_RETURN_CODE()` - Return 0 if all tests passed, 1 otherwise
-- `BETATEST_RESET()` - Reset all test statistics
+- `TEST_SUMMARY()` - Print test summary with statistics
+- `TEST_RETURN_CODE()` - Return 0 if all tests passed, 1 otherwise
+- `TEST_RESET()` - Reset all test statistics
 
 ### Configuration
 
-- Define `BETATEST_NO_COLOR` before including the header to disable colored output:
+You can define certain FLAGS to change behaviour before including the header file
+
+- Define `BETATEST_NO_COLOR`  to disable colored output
+- Define BETATEST_PRINT_ON_TEST to print the test being run. Useful if the test hangs
+- Define BETATEST_PRINT_ON_PASS to print the test on pass
+- Define BETATEST_PRINT_NOT_ON_FAIL to NOT print test and output on fail
 
 ```c
-#define BETATEST_NO_COLOR
+// #define BETATEST_NO_COLOR
+#define BETATEST_PRINT_ON_TEST
+#define BETATEST_PRINT_ON_PASS
+// #define BETATEST_PRINT_NOT_ON_FAIL
 #include "betatest.h"
 ```
 
