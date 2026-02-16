@@ -196,112 +196,116 @@ static struct {
 /* Integer comparison with value display */
 #define ASSERT_INT_EQ(a, b)                                                    \
     do {                                                                       \
-        long long _a = (long long)(a);                                         \
-        long long _b = (long long)(b);                                         \
-        if (_a == _b) {                                                        \
+        long long _betatest_a = (long long)(a);                                \
+        long long _betatest_b = (long long)(b);                                \
+        if (_betatest_a == _betatest_b) {                                      \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: integers not equal\n"      \
                                  "       1:  %s = %lld\n"                      \
                                  "       2:  %s = %lld",                       \
-                                 #a, _a, #b, _b);                              \
+                                 #a, _betatest_a, #b, _betatest_b);            \
         }                                                                      \
     } while (0)
 
 #define ASSERT_INT_NEQ(a, b)                                                   \
     do {                                                                       \
-        long long _a = (long long)(a);                                         \
-        long long _b = (long long)(b);                                         \
-        if (_a != _b) {                                                        \
+        long long _betatest_a = (long long)(a);                                \
+        long long _betatest_b = (long long)(b);                                \
+        if (_betatest_a != _betatest_b) {                                      \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL(                                              \
                 "Assertion failed: integers should not be equal\n"             \
                 "       Both: %lld",                                           \
-                _a);                                                           \
+                _betatest_a);                                                  \
         }                                                                      \
     } while (0)
 
 /* String comparison */
 #define ASSERT_STR_EQ(s1, s2)                                                  \
     do {                                                                       \
-        const char *_s1 = (s1);                                                \
-        const char *_s2 = (s2);                                                \
-        if (_s1 == NULL && _s2 == NULL) {                                      \
+        const char *_betatest_s1 = (s1);                                       \
+        const char *_betatest_s2 = (s2);                                       \
+        if (_betatest_s1 == NULL && _betatest_s2 == NULL) {                    \
             BETATEST_RECORD_PASS();                                            \
-        } else if (_s1 == NULL || _s2 == NULL) {                               \
+        } else if (_betatest_s1 == NULL || _betatest_s2 == NULL) {             \
             BETATEST_RECORD_FAIL("Assertion failed: one string is NULL\n"      \
                                  "       %s = %s\n"                            \
                                  "       %s = %s",                             \
-                                 #s1, _s1 ? _s1 : "NULL", #s2,                 \
-                                 _s2 ? _s2 : "NULL");                          \
-        } else if (strcmp(_s1, _s2) == 0) {                                    \
+                                 #s1, _betatest_s1 ? _betatest_s1 : "NULL",    \
+                                 #s2, _betatest_s2 ? _betatest_s2 : "NULL");   \
+        } else if (strcmp(_betatest_s1, _betatest_s2) == 0) {                  \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: strings not equal\n"       \
                                  "       1:  %s = \"%s\"\n"                    \
                                  "       2:  %s = \"%s\"\n",                   \
-                                 #s1, _s1, #s2, _s2);                          \
+                                 #s1, _betatest_s1, #s2, _betatest_s2);        \
         }                                                                      \
     } while (0)
 
 #define ASSERT_STR_NEQ(s1, s2)                                                 \
     do {                                                                       \
-        const char *_s1 = (s1);                                                \
-        const char *_s2 = (s2);                                                \
-        if (_s1 == NULL || _s2 == NULL || strcmp(_s1, _s2) != 0) {             \
+        const char *_betatest_s1 = (s1);                                       \
+        const char *_betatest_s2 = (s2);                                       \
+        if (_betatest_s1 == NULL || _betatest_s2 == NULL ||                    \
+            strcmp(_betatest_s1, _betatest_s2) != 0) {                         \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL(                                              \
                 "Assertion failed: strings should not be equal\n"              \
                 "       Both: \"%s\"",                                         \
-                _s1);                                                          \
+                _betatest_s1);                                                 \
         }                                                                      \
     } while (0)
 
 /* String contains substring */
 #define ASSERT_STR_CONTAINS(str, substr)                                       \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        const char *_substr = (substr);                                        \
-        if (_str == NULL || _substr == NULL) {                                 \
+        const char *_betatest_str = (str);                                     \
+        const char *_betatest_substr = (substr);                               \
+        if (_betatest_str == NULL || _betatest_substr == NULL) {               \
             BETATEST_RECORD_FAIL("Assertion failed: one string is NULL\n"      \
                                  "       %s = %s\n"                            \
                                  "       %s = %s",                             \
-                                 #str, _str ? _str : "NULL", #substr,          \
-                                 _substr ? _substr : "NULL");                  \
-        } else if (strstr(_str, _substr) != NULL) {                            \
+                                 #str, _betatest_str ? _betatest_str : "NULL", \
+                                 #substr,                                      \
+                                 _betatest_substr ? _betatest_substr : "NULL");\
+        } else if (strstr(_betatest_str, _betatest_substr) != NULL) {          \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL(                                              \
                 "Assertion failed: string does not contain substring\n"        \
                 "       String:    %s = \"%s\"\n"                              \
                 "       Substring: %s = \"%s\"",                               \
-                #str, _str, #substr, _substr);                                 \
+                #str, _betatest_str, #substr, _betatest_substr);               \
         }                                                                      \
     } while (0)
 
 /* String starts with prefix */
 #define ASSERT_STR_STARTS_WITH(str, prefix)                                    \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        const char *_prefix = (prefix);                                        \
-        if (_str == NULL || _prefix == NULL) {                                 \
+        const char *_betatest_str = (str);                                     \
+        const char *_betatest_prefix = (prefix);                               \
+        if (_betatest_str == NULL || _betatest_prefix == NULL) {               \
             BETATEST_RECORD_FAIL("Assertion failed: one string is NULL\n"      \
                                  "       %s = %s\n"                            \
                                  "       %s = %s",                             \
-                                 #str, _str ? _str : "NULL", #prefix,          \
-                                 _prefix ? _prefix : "NULL");                  \
+                                 #str, _betatest_str ? _betatest_str : "NULL", \
+                                 #prefix,                                      \
+                                 _betatest_prefix ? _betatest_prefix : "NULL");\
         } else {                                                               \
-            size_t prefix_len = strlen(_prefix);                               \
-            if (strncmp(_str, _prefix, prefix_len) == 0) {                     \
+            size_t _betatest_prefix_len = strlen(_betatest_prefix);            \
+            if (strncmp(_betatest_str, _betatest_prefix,                       \
+                        _betatest_prefix_len) == 0) {                          \
                 BETATEST_RECORD_PASS();                                        \
             } else {                                                           \
                 BETATEST_RECORD_FAIL(                                          \
                     "Assertion failed: string does not start with prefix\n"    \
                     "       String: %s = \"%s\"\n"                             \
                     "       Prefix: %s = \"%s\"",                              \
-                    #str, _str, #prefix, _prefix);                             \
+                    #str, _betatest_str, #prefix, _betatest_prefix);           \
             }                                                                  \
         }                                                                      \
     } while (0)
@@ -309,26 +313,28 @@ static struct {
 /* String ends with suffix */
 #define ASSERT_STR_ENDS_WITH(str, suffix)                                      \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        const char *_suffix = (suffix);                                        \
-        if (_str == NULL || _suffix == NULL) {                                 \
+        const char *_betatest_str = (str);                                     \
+        const char *_betatest_suffix = (suffix);                               \
+        if (_betatest_str == NULL || _betatest_suffix == NULL) {               \
             BETATEST_RECORD_FAIL("Assertion failed: one string is NULL\n"      \
                                  "       %s = %s\n"                            \
                                  "       %s = %s",                             \
-                                 #str, _str ? _str : "NULL", #suffix,          \
-                                 _suffix ? _suffix : "NULL");                  \
+                                 #str, _betatest_str ? _betatest_str : "NULL", \
+                                 #suffix,                                      \
+                                 _betatest_suffix ? _betatest_suffix : "NULL");\
         } else {                                                               \
-            size_t str_len = strlen(_str);                                     \
-            size_t suffix_len = strlen(_suffix);                               \
-            if (suffix_len <= str_len &&                                       \
-                strcmp(_str + str_len - suffix_len, _suffix) == 0) {           \
+            size_t _betatest_str_len = strlen(_betatest_str);                  \
+            size_t _betatest_suffix_len = strlen(_betatest_suffix);            \
+            if (_betatest_suffix_len <= _betatest_str_len &&                   \
+                strcmp(_betatest_str + _betatest_str_len -                     \
+                       _betatest_suffix_len, _betatest_suffix) == 0) {         \
                 BETATEST_RECORD_PASS();                                        \
             } else {                                                           \
                 BETATEST_RECORD_FAIL(                                          \
                     "Assertion failed: string does not end with suffix\n"      \
                     "       String: %s = \"%s\"\n"                             \
                     "       Suffix: %s = \"%s\"",                              \
-                    #str, _str, #suffix, _suffix);                             \
+                    #str, _betatest_str, #suffix, _betatest_suffix);           \
             }                                                                  \
         }                                                                      \
     } while (0)
@@ -336,29 +342,29 @@ static struct {
 /* String is empty */
 #define ASSERT_STR_EMPTY(str)                                                  \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        if (_str == NULL) {                                                    \
+        const char *_betatest_str = (str);                                     \
+        if (_betatest_str == NULL) {                                           \
             BETATEST_RECORD_FAIL("Assertion failed: string is NULL\n"          \
                                  "       %s = NULL",                           \
                                  #str);                                        \
-        } else if (_str[0] == '\0') {                                          \
+        } else if (_betatest_str[0] == '\0') {                                 \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: string is not empty\n"     \
                                  "       %s = \"%s\"",                         \
-                                 #str, _str);                                  \
+                                 #str, _betatest_str);                         \
         }                                                                      \
     } while (0)
 
 /* String is not empty */
 #define ASSERT_STR_NOT_EMPTY(str)                                              \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        if (_str == NULL) {                                                    \
+        const char *_betatest_str = (str);                                     \
+        if (_betatest_str == NULL) {                                           \
             BETATEST_RECORD_FAIL("Assertion failed: string is NULL\n"          \
                                  "       %s = NULL",                           \
                                  #str);                                        \
-        } else if (_str[0] != '\0') {                                          \
+        } else if (_betatest_str[0] != '\0') {                                 \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: string is empty\n"         \
@@ -370,36 +376,40 @@ static struct {
 /* String matches regex pattern */
 #define ASSERT_STR_MATCHES(str, pattern)                                       \
     do {                                                                       \
-        const char *_str = (str);                                              \
-        const char *_pattern = (pattern);                                      \
-        if (_str == NULL || _pattern == NULL) {                                \
+        const char *_betatest_str = (str);                                     \
+        const char *_betatest_pattern = (pattern);                             \
+        if (_betatest_str == NULL || _betatest_pattern == NULL) {              \
             BETATEST_RECORD_FAIL("Assertion failed: string or pattern is NULL\n" \
                                  "       %s = %s\n"                            \
                                  "       %s = %s",                             \
-                                 #str, _str ? _str : "NULL", #pattern,         \
-                                 _pattern ? _pattern : "NULL");                \
+                                 #str, _betatest_str ? _betatest_str : "NULL", \
+                                 #pattern,                                     \
+                                 _betatest_pattern ? _betatest_pattern : "NULL");\
         } else {                                                               \
-            regex_t _regex;                                                    \
-            int _regex_err = regcomp(&_regex, _pattern, REG_EXTENDED);         \
-            if (_regex_err != 0) {                                             \
-                char _errbuf[256];                                             \
-                regerror(_regex_err, &_regex, _errbuf, sizeof(_errbuf));       \
+            regex_t _betatest_regex;                                           \
+            int _betatest_regex_err = regcomp(&_betatest_regex,                \
+                                              _betatest_pattern, REG_EXTENDED);\
+            if (_betatest_regex_err != 0) {                                    \
+                char _betatest_errbuf[256];                                    \
+                regerror(_betatest_regex_err, &_betatest_regex,                \
+                         _betatest_errbuf, sizeof(_betatest_errbuf));          \
                 BETATEST_RECORD_FAIL(                                          \
                     "Assertion failed: regex compilation error\n"              \
                     "       Pattern: %s = \"%s\"\n"                            \
                     "       Error:   %s",                                      \
-                    #pattern, _pattern, _errbuf);                              \
+                    #pattern, _betatest_pattern, _betatest_errbuf);            \
             } else {                                                           \
-                int _match_result = regexec(&_regex, _str, 0, NULL, 0);       \
-                regfree(&_regex);                                              \
-                if (_match_result == 0) {                                      \
+                int _betatest_match = regexec(&_betatest_regex, _betatest_str, \
+                                              0, NULL, 0);                     \
+                regfree(&_betatest_regex);                                     \
+                if (_betatest_match == 0) {                                    \
                     BETATEST_RECORD_PASS();                                    \
                 } else {                                                       \
                     BETATEST_RECORD_FAIL(                                      \
                         "Assertion failed: string does not match pattern\n"    \
                         "       String:  %s = \"%s\"\n"                        \
                         "       Pattern: %s = \"%s\"",                         \
-                        #str, _str, #pattern, _pattern);                       \
+                        #str, _betatest_str, #pattern, _betatest_pattern);     \
                 }                                                              \
             }                                                                  \
         }                                                                      \
@@ -408,10 +418,10 @@ static struct {
 /* Float/double comparison with epsilon */
 #define ASSERT_FLOAT_EQ(a, b, epsilon)                                         \
     do {                                                                       \
-        double _a = (double)(a);                                               \
-        double _b = (double)(b);                                               \
-        double _epsilon = (double)(epsilon);                                   \
-        if (fabs(_a - _b) <= _epsilon) {                                       \
+        double _betatest_a = (double)(a);                                      \
+        double _betatest_b = (double)(b);                                      \
+        double _betatest_epsilon = (double)(epsilon);                          \
+        if (fabs(_betatest_a - _betatest_b) <= _betatest_epsilon) {            \
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL(                                              \
@@ -420,7 +430,8 @@ static struct {
                 "       Expected: %s = %.10g\n"                                \
                 "       Epsilon:  %.10g\n"                                     \
                 "       Diff:     %.10g",                                      \
-                #a, _a, #b, _b, _epsilon, fabs(_a - _b));                      \
+                #a, _betatest_a, #b, _betatest_b, _betatest_epsilon,           \
+                fabs(_betatest_a - _betatest_b));                              \
         }                                                                      \
     } while (0)
 
