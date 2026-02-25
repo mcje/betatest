@@ -10,6 +10,7 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 - Detailed failure messages with file and line numbers
 - Test statistics (pass/fail counts)
 - Continues running all tests after failures
+- Loop-friendly assertions with `ASSERT_ONCE`
 - Single-header library
 
 ## Quick Start
@@ -102,6 +103,29 @@ gcc -o test example_test.c -lm
 
 - `ASSERT_MSG(condition, message, ...)` - Assert with custom printf-style message
 
+### Loop-Friendly Assertions
+
+- `ASSERT_ONCE(assertion)` - Prints first failure only, counts all failures
+- `ASSERT_SINGLE(assertion)` - Prints first failure only, counts as 1 assertion total
+
+When testing in loops, a failing assertion can produce thousands of error messages. These wrappers suppress repeated output:
+
+```c
+TEST(test_array_values) {
+    /* ASSERT_ONCE: prints once, counts all failures */
+    for (int i = 0; i < 1000; ++i) {
+        ASSERT_ONCE(ASSERT_INT_EQ(array[i], expected[i]));
+    }
+    // 1000 assertions, N failures (however many actually failed)
+
+    /* ASSERT_SINGLE: prints once, counts as 1 assertion */
+    for (int i = 0; i < 1000; ++i) {
+        ASSERT_SINGLE(ASSERT_GT(array[i], 0));
+    }
+    // 1 assertion, 0 or 1 failure (pass if all pass, fail if any fail)
+}
+```
+
 ## Example
 
 ```c
@@ -143,6 +167,11 @@ int main(void) {
 - `TEST_SUMMARY()` - Print test summary with statistics
 - `TEST_RETURN_CODE()` - Return 0 if all tests passed, 1 otherwise
 - `TEST_RESET()` - Reset all test statistics
+
+### Assertion Wrappers
+
+- `ASSERT_ONCE(assertion)` - Prints once, counts all failures
+- `ASSERT_SINGLE(assertion)` - Prints once, counts as 1 pass/fail total
 
 ### Configuration
 

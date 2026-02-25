@@ -9,7 +9,7 @@ int add(int a, int b) { return a + b; }
 
 int multiply(int a, int b) { return a * b; }
 
-char *greet(const char *name) {
+char* greet(const char* name) {
     static char buffer[256];
     snprintf(buffer, sizeof(buffer), "Hello, %s!", name);
     return buffer;
@@ -43,13 +43,13 @@ TEST(test_comparisons) {
 }
 
 TEST(test_string_operations) {
-    const char *result = greet("World");
+    const char* result = greet("World");
     ASSERT_STR_EQ(result, "Hello, World!");
     ASSERT_STR_NEQ(result, "Goodbye");
 }
 
 TEST(test_null_pointers) {
-    char *ptr = NULL;
+    char* ptr = NULL;
     ASSERT_NULL(ptr);
 
     ptr = "not null";
@@ -69,6 +69,21 @@ TEST(test_with_intentional_failure) {
     ASSERT_TRUE(0); /* This also fails */
 }
 
+/* Demonstrates ASSERT_ONCE and ASSERT_SINGLE in loops */
+TEST(test_loop_assertions) {
+    /* ASSERT_ONCE: prints once, counts all failures (5 failures counted) */
+    for (int i = 0; i < 10; ++i) {
+        ASSERT_ONCE(ASSERT_INT_EQ(i % 2, 0));
+    }
+
+    /* ASSERT_SINGLE: prints once, counts as 1 assertion total (1 failure counted) */
+    for (int i = 0; i < 10; ++i) {
+        ASSERT_SINGLE(ASSERT_INT_EQ(i % 2, 0));
+    }
+
+    /* Total: 11 assertions (10 from ASSERT_ONCE + 1 from ASSERT_SINGLE), 6 failed */
+}
+
 int main(void) {
     printf("Running BetaTest Example Tests\n\n");
 
@@ -80,6 +95,7 @@ int main(void) {
     RUN_TEST(test_null_pointers);
     RUN_TEST(test_float_equality);
     RUN_TEST(test_with_intentional_failure);
+    RUN_TEST(test_loop_assertions);
 
     TEST_SUMMARY();
 

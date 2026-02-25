@@ -59,7 +59,10 @@ static struct {
     int assertions_failed;
     int current_test_failed;
     char *current_test_name;
-} betatest_stats = {0, 0, 0, 0, 0, 0, 0, 0};
+    int suppress_failure_output;
+    int suppress_recording;
+    int last_assertion_failed;
+} betatest_stats = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /* Print helpers */
 #define BETATEST_PRINT_PASS()                                                  \
@@ -107,16 +110,22 @@ static struct {
 /* Assertion helpers */
 #define BETATEST_RECORD_PASS()                                                 \
     do {                                                                       \
-        betatest_stats.assertions_run++;                                       \
-        betatest_stats.assertions_passed++;                                    \
+        betatest_stats.last_assertion_failed = 0;                              \
+        if (!betatest_stats.suppress_recording) {                              \
+            betatest_stats.assertions_run++;                                   \
+            betatest_stats.assertions_passed++;                                \
+        }                                                                      \
     } while (0)
 
 #define BETATEST_RECORD_FAIL(msg, ...)                                         \
     do {                                                                       \
-        betatest_stats.assertions_run++;                                       \
-        betatest_stats.assertions_failed++;                                    \
-        betatest_stats.current_test_failed = 1;                                \
-        if (BETATEST_DO_PRINT_FAIL) {                                          \
+        betatest_stats.last_assertion_failed = 1;                              \
+        if (!betatest_stats.suppress_recording) {                              \
+            betatest_stats.assertions_run++;                                   \
+            betatest_stats.assertions_failed++;                                \
+            betatest_stats.current_test_failed = 1;                            \
+        }                                                                      \
+        if (BETATEST_DO_PRINT_FAIL && !betatest_stats.suppress_failure_output) {\
             BETATEST_PRINT_FAIL();                                             \
             printf("%s\n       ", betatest_stats.current_test_name);           \
             printf(msg, ##__VA_ARGS__);                                        \
@@ -483,6 +492,54 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: " msg, ##__VA_ARGS__);     \
+        }                                                                      \
+    } while (0)
+
+/* Loop-friendly assertion wrapper - prints failure only once per call site */
+#define ASSERT_ONCE(assertion)                                                 \
+    do {                                                                       \
+        static int _betatest_once_printed = 0;                                 \
+        int _betatest_prev_suppress = betatest_stats.suppress_failure_output;  \
+        if (_betatest_once_printed) {                                          \
+            betatest_stats.suppress_failure_output = 1;                        \
+        }                                                                      \
+        assertion;                                                             \
+        if (!_betatest_once_printed && betatest_stats.last_assertion_failed) { \
+            _betatest_once_printed = 1;                                        \
+        }                                                                      \
+        betatest_stats.suppress_failure_output = _betatest_prev_suppress;      \
+    } while (0)
+
+/* Loop-friendly assertion wrapper - counts as single assertion, prints once */
+#define ASSERT_SINGLE(assertion)                                               \
+    do {                                                                       \
+        static int _betatest_single_recorded = 0;                              \
+        static int _betatest_single_failed = 0;                                \
+        int _betatest_prev_suppress_rec = betatest_stats.suppress_recording;   \
+        int _betatest_prev_suppress_out = betatest_stats.suppress_failure_output; \
+        betatest_stats.suppress_recording = 1;                                 \
+        if (_betatest_single_failed) {                                         \
+            betatest_stats.suppress_failure_output = 1;                        \
+        }                                                                      \
+        assertion;                                                             \
+        betatest_stats.suppress_recording = _betatest_prev_suppress_rec;       \
+        betatest_stats.suppress_failure_output = _betatest_prev_suppress_out;  \
+        if (!_betatest_single_recorded) {                                      \
+            _betatest_single_recorded = 1;                                     \
+            betatest_stats.assertions_run++;                                   \
+            if (betatest_stats.last_assertion_failed) {                        \
+                _betatest_single_failed = 1;                                   \
+                betatest_stats.assertions_failed++;                            \
+                betatest_stats.current_test_failed = 1;                        \
+            } else {                                                           \
+                betatest_stats.assertions_passed++;                            \
+            }                                                                  \
+        } else if (!_betatest_single_failed &&                                 \
+                   betatest_stats.last_assertion_failed) {                     \
+            _betatest_single_failed = 1;                                       \
+            betatest_stats.assertions_passed--;                                \
+            betatest_stats.assertions_failed++;                                \
+            betatest_stats.current_test_failed = 1;                            \
         }                                                                      \
     } while (0)
 
