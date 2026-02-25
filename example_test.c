@@ -84,6 +84,35 @@ TEST(test_loop_assertions) {
     /* Total: 11 assertions (10 from ASSERT_ONCE + 1 from ASSERT_SINGLE), 6 failed */
 }
 
+/* Demonstrates array assertions */
+TEST(test_array_assertions) {
+    int a[] = {1, 2, 3, 4, 5};
+    int b[] = {1, 2, 3, 4, 5};
+    int c[] = {1, 2, 9, 4, 5};
+
+    ASSERT_ARRAY_EQ(a, b, 5); /* pass */
+    ASSERT_ARRAY_EQ(a, c, 5); /* fail at index 2 */
+
+    ASSERT_ARRAY_CONTAINS(a, 5, 3); /* pass */
+    ASSERT_ARRAY_CONTAINS(a, 5, 9); /* fail */
+
+    char mem1[] = {0x01, 0x02, 0x03};
+    char mem2[] = {0x01, 0x02, 0x03};
+    char mem3[] = {0x01, 0xFF, 0x03};
+
+    ASSERT_MEM_EQ(mem1, mem2, 3); /* pass */
+    ASSERT_MEM_EQ(mem1, mem3, 3); /* fail at byte 1 */
+
+    /* Struct array - shows hex dump for unknown types */
+    struct point { int x; int y; };
+    struct point p1[] = {{1, 2}, {3, 4}};
+    struct point p2[] = {{1, 2}, {3, 4}};
+    struct point p3[] = {{1, 2}, {5, 6}};
+
+    ASSERT_ARRAY_EQ(p1, p2, 2); /* pass */
+    ASSERT_ARRAY_EQ(p1, p3, 2); /* fail - shows hex dump */
+}
+
 int main(void) {
     printf("Running BetaTest Example Tests\n\n");
 
@@ -96,6 +125,7 @@ int main(void) {
     RUN_TEST(test_float_equality);
     RUN_TEST(test_with_intentional_failure);
     RUN_TEST(test_loop_assertions);
+    RUN_TEST(test_array_assertions);
 
     TEST_SUMMARY();
 

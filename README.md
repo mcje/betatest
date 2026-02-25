@@ -10,7 +10,8 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 - Detailed failure messages with file and line numbers
 - Test statistics (pass/fail counts)
 - Continues running all tests after failures
-- Loop-friendly assertions with `ASSERT_ONCE`
+- Loop-friendly assertions with `ASSERT_ONCE` and `ASSERT_SINGLE`
+- Array and memory comparison with side-by-side hex diff
 - Single-header library
 
 ## Quick Start
@@ -103,6 +104,37 @@ gcc -o test example_test.c -lm
 
 - `ASSERT_MSG(condition, message, ...)` - Assert with custom printf-style message
 
+### Array/Memory Assertions
+
+- `ASSERT_ARRAY_EQ(a, b, len)` - Assert arrays are equal element-by-element
+- `ASSERT_MEM_EQ(a, b, size)` - Assert memory regions are equal byte-by-byte
+- `ASSERT_ARRAY_CONTAINS(arr, len, value)` - Assert array contains a value
+
+These assertions show a side-by-side hex diff on failure:
+
+```c
+TEST(test_arrays) {
+    int a[] = {1, 2, 3, 4, 5};
+    int b[] = {1, 2, 9, 4, 5};
+    ASSERT_ARRAY_EQ(a, b, 5);  /* Fails at index 2 */
+}
+```
+
+Output:
+```
+[FAIL] test_arrays
+       Arrays not equal at index 2
+       Offset: a[2]                     | b[2]
+       0x0000: 03 00 00 00              | 09 00 00 00
+       at test.c:5
+```
+
+Features:
+- First difference highlighted in red, other differences in yellow
+- Works with primitives (shows hex of value) and structs (shows full hex dump)
+- Grey `??` padding for alignment when comparing small buffers
+- Configurable max bytes to display (see Configuration)
+
 ### Loop-Friendly Assertions
 
 - `ASSERT_ONCE(assertion)` - Prints first failure only, counts all failures
@@ -168,6 +200,12 @@ int main(void) {
 - `TEST_RETURN_CODE()` - Return 0 if all tests passed, 1 otherwise
 - `TEST_RESET()` - Reset all test statistics
 
+### Array/Memory Assertions
+
+- `ASSERT_ARRAY_EQ(a, b, len)` - Compare arrays element-by-element
+- `ASSERT_MEM_EQ(a, b, size)` - Compare memory byte-by-byte
+- `ASSERT_ARRAY_CONTAINS(arr, len, value)` - Check array contains value
+
 ### Assertion Wrappers
 
 - `ASSERT_ONCE(assertion)` - Prints once, counts all failures
@@ -175,18 +213,26 @@ int main(void) {
 
 ### Configuration
 
-You can define certain FLAGS to change behaviour before including the header file
+You can define certain FLAGS to change behaviour before including the header file.
 
-- Define `BETATEST_NO_COLOR`  to disable colored output
-- Define BETATEST_PRINT_ON_TEST to print the test being run. Useful if the test hangs
-- Define BETATEST_PRINT_ON_PASS to print the test on pass
-- Define BETATEST_PRINT_NOT_ON_FAIL to NOT print test and output on fail
+#### Output Control
+
+- `BETATEST_NO_COLOR` - Disable colored output
+- `BETATEST_PRINT_ON_TEST` - Print the test name when starting (useful if test hangs)
+- `BETATEST_PRINT_ON_PASS` - Print the test name on pass
+- `BETATEST_PRINT_NOT_ON_FAIL` - Suppress output on failure
+
+#### Hex Dump Settings
+
+- `BETATEST_HEX_MAX_BYTES` - Max bytes to show in hex diff (default: 64, 0 = unlimited)
+- `BETATEST_HEX_BYTES_PER_LINE` - Bytes per line in hex output (default: 16)
 
 ```c
 // #define BETATEST_NO_COLOR
 #define BETATEST_PRINT_ON_TEST
 #define BETATEST_PRINT_ON_PASS
 // #define BETATEST_PRINT_NOT_ON_FAIL
+#define BETATEST_HEX_MAX_BYTES 128  /* Show more context in hex diffs */
 #include "betatest.h"
 ```
 

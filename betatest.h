@@ -14,6 +14,14 @@
 #define BETATEST_USE_COLOR 0
 #endif
 
+#ifndef BETATEST_HEX_MAX_BYTES
+#define BETATEST_HEX_MAX_BYTES 64 /* 0 = print all */
+#endif
+
+#ifndef BETATEST_HEX_BYTES_PER_LINE
+#define BETATEST_HEX_BYTES_PER_LINE 16
+#endif
+
 #ifndef BETATEST_PRINT_ON_TEST
 #define BETATEST_DO_PRINT_TEST 0
 #else
@@ -38,13 +46,17 @@
 #define BETATEST_COLOR_RED "\033[31m"
 #define BETATEST_COLOR_YELLOW "\033[33m"
 #define BETATEST_COLOR_CYAN "\033[36m"
+#define BETATEST_COLOR_DIM "\033[90m"
 #define BETATEST_COLOR_RESET "\033[0m"
 #define BETATEST_COLOR_BOLD "\033[1m"
+#define BETATEST_HEX_PADDING "??"
 #else
 #define BETATEST_COLOR_GREEN ""
 #define BETATEST_COLOR_RED ""
 #define BETATEST_COLOR_YELLOW ""
 #define BETATEST_COLOR_CYAN ""
+#define BETATEST_COLOR_DIM ""
+#define BETATEST_HEX_PADDING "??"
 #define BETATEST_COLOR_RESET ""
 #define BETATEST_COLOR_BOLD ""
 #endif
@@ -73,6 +85,194 @@ static struct {
 
 #define BETATEST_PRINT_INFO()                                                  \
     printf("%s[INFO]%s ", BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET)
+
+/* Helper functions to print values by pointer (uniform signature for _Generic) */
+static inline void betatest_print_hex(const void *p, size_t size) {
+    const unsigned char *bytes = (const unsigned char *)p;
+    if (size <= 8) {
+        /* Small values: inline format */
+        printf("0x");
+        for (size_t i = 0; i < size; ++i) {
+            printf("%02x", bytes[i]);
+        }
+    } else {
+        /* Larger values: multi-line format */
+        printf("\n");
+        for (size_t i = 0; i < size; i += BETATEST_HEX_BYTES_PER_LINE) {
+            printf("              0x%04zx: ", i);
+            for (size_t j = 0; j < BETATEST_HEX_BYTES_PER_LINE && i + j < size; ++j) {
+                printf("%02x ", bytes[i + j]);
+            }
+            printf("\n");
+        }
+        printf("             ");
+    }
+}
+
+/* Helper to print side-by-side memory diff centered on diff_offset */
+static inline void betatest_print_hex_diff(const void *pa, const void *pb,
+                                           size_t size, size_t diff_offset,
+                                           const char *name_a, const char *name_b) {
+    const unsigned char *a = (const unsigned char *)pa;
+    const unsigned char *b = (const unsigned char *)pb;
+    size_t start = 0;
+    size_t end = size;
+    int truncated_start = 0;
+    int truncated_end = 0;
+
+    /* Use half the bytes per line for side-by-side display */
+    size_t bpl = BETATEST_HEX_BYTES_PER_LINE / 2;
+    if (bpl < 4) bpl = 4;
+
+    /* Calculate column width: each byte = "XX " (3 chars) */
+    size_t col_width = bpl * 3;
+
+    if (BETATEST_HEX_MAX_BYTES > 0 && size > (size_t)BETATEST_HEX_MAX_BYTES) {
+        size_t half = BETATEST_HEX_MAX_BYTES / 2;
+        if (diff_offset > half) {
+            start = diff_offset - half;
+            truncated_start = 1;
+        }
+        end = start + BETATEST_HEX_MAX_BYTES;
+        if (end > size) {
+            end = size;
+            if (start > 0 && end - start < (size_t)BETATEST_HEX_MAX_BYTES) {
+                start = (end > (size_t)BETATEST_HEX_MAX_BYTES) ?
+                        end - BETATEST_HEX_MAX_BYTES : 0;
+            }
+        }
+        if (end < size) {
+            truncated_end = 1;
+        }
+    }
+
+    /* Align start to line boundary */
+    start = (start / bpl) * bpl;
+
+    /* Print header with proper alignment */
+    printf("       Offset: %-*s | %s\n", (int)col_width, name_a, name_b);
+
+    if (truncated_start) {
+        printf("       ... (showing bytes %zu-%zu of %zu)\n", start, end - 1, size);
+    }
+
+    for (size_t i = start; i < end; i += bpl) {
+        printf("       0x%04zx: ", i);
+
+        /* Left side (a) */
+        for (size_t j = 0; j < bpl && i + j < end; ++j) {
+            if (i + j == diff_offset) {
+                printf("%s%02x%s ", BETATEST_COLOR_RED, a[i + j],
+                       BETATEST_COLOR_RESET);
+            } else if (a[i + j] != b[i + j]) {
+                printf("%s%02x%s ", BETATEST_COLOR_YELLOW, a[i + j],
+                       BETATEST_COLOR_RESET);
+            } else {
+                printf("%02x ", a[i + j]);
+            }
+        }
+        for (size_t j = end - i; j < bpl; ++j) {
+            printf("%s%s%s ", BETATEST_COLOR_DIM, BETATEST_HEX_PADDING,
+                   BETATEST_COLOR_RESET);
+        }
+
+        printf(" | ");
+
+        /* Right side (b) */
+        for (size_t j = 0; j < bpl && i + j < end; ++j) {
+            if (i + j == diff_offset) {
+                printf("%s%02x%s ", BETATEST_COLOR_RED, b[i + j],
+                       BETATEST_COLOR_RESET);
+            } else if (a[i + j] != b[i + j]) {
+                printf("%s%02x%s ", BETATEST_COLOR_YELLOW, b[i + j],
+                       BETATEST_COLOR_RESET);
+            } else {
+                printf("%02x ", b[i + j]);
+            }
+        }
+        for (size_t j = end - i; j < bpl; ++j) {
+            printf("%s%s%s ", BETATEST_COLOR_DIM, BETATEST_HEX_PADDING,
+                   BETATEST_COLOR_RESET);
+        }
+        printf("\n");
+    }
+
+    if (truncated_end) {
+        printf("       ...\n");
+    }
+}
+static inline void betatest_print_char(const void *p, size_t s) {
+    (void)s; printf("'%c'", *(const char *)p);
+}
+static inline void betatest_print_schar(const void *p, size_t s) {
+    (void)s; printf("%hhd", *(const signed char *)p);
+}
+static inline void betatest_print_uchar(const void *p, size_t s) {
+    (void)s; printf("%hhu", *(const unsigned char *)p);
+}
+static inline void betatest_print_short(const void *p, size_t s) {
+    (void)s; printf("%hd", *(const short *)p);
+}
+static inline void betatest_print_ushort(const void *p, size_t s) {
+    (void)s; printf("%hu", *(const unsigned short *)p);
+}
+static inline void betatest_print_int(const void *p, size_t s) {
+    (void)s; printf("%d", *(const int *)p);
+}
+static inline void betatest_print_uint(const void *p, size_t s) {
+    (void)s; printf("%u", *(const unsigned int *)p);
+}
+static inline void betatest_print_long(const void *p, size_t s) {
+    (void)s; printf("%ld", *(const long *)p);
+}
+static inline void betatest_print_ulong(const void *p, size_t s) {
+    (void)s; printf("%lu", *(const unsigned long *)p);
+}
+static inline void betatest_print_llong(const void *p, size_t s) {
+    (void)s; printf("%lld", *(const long long *)p);
+}
+static inline void betatest_print_ullong(const void *p, size_t s) {
+    (void)s; printf("%llu", *(const unsigned long long *)p);
+}
+static inline void betatest_print_float(const void *p, size_t s) {
+    (void)s; printf("%g", (double)*(const float *)p);
+}
+static inline void betatest_print_double(const void *p, size_t s) {
+    (void)s; printf("%g", *(const double *)p);
+}
+static inline void betatest_print_str(const void *p, size_t s) {
+    (void)s; printf("\"%s\"", *(const char *const *)p);
+}
+
+/* Helper macro to print a value with appropriate format (C11 _Generic) */
+#define BETATEST_PRINT_VAL(x) (_Generic((x),                                   \
+    char: betatest_print_char,                                                 \
+    signed char: betatest_print_schar,                                         \
+    unsigned char: betatest_print_uchar,                                       \
+    short: betatest_print_short,                                               \
+    unsigned short: betatest_print_ushort,                                     \
+    int: betatest_print_int,                                                   \
+    unsigned int: betatest_print_uint,                                         \
+    long: betatest_print_long,                                                 \
+    unsigned long: betatest_print_ulong,                                       \
+    long long: betatest_print_llong,                                           \
+    unsigned long long: betatest_print_ullong,                                 \
+    float: betatest_print_float,                                               \
+    double: betatest_print_double,                                             \
+    char *: betatest_print_str,                                                \
+    const char *: betatest_print_str,                                          \
+    default: betatest_print_hex))(&(x), sizeof(x))
+
+/* Helper macro to check if type is a known primitive (1) or unknown/struct (0) */
+#define BETATEST_IS_PRIMITIVE(x) _Generic((x),                                 \
+    char: 1, signed char: 1, unsigned char: 1,                                 \
+    short: 1, unsigned short: 1,                                               \
+    int: 1, unsigned int: 1,                                                   \
+    long: 1, unsigned long: 1,                                                 \
+    long long: 1, unsigned long long: 1,                                       \
+    float: 1, double: 1,                                                       \
+    char *: 1, const char *: 1,                                                \
+    default: 0)
 
 /* Test definition macros */
 #define TEST(name)                                                             \
@@ -492,6 +692,127 @@ static struct {
             BETATEST_RECORD_PASS();                                            \
         } else {                                                               \
             BETATEST_RECORD_FAIL("Assertion failed: " msg, ##__VA_ARGS__);     \
+        }                                                                      \
+    } while (0)
+
+/* Array equality - compares element by element */
+#define ASSERT_ARRAY_EQ(a, b, len)                                             \
+    do {                                                                       \
+        size_t _betatest_len = (len);                                          \
+        int _betatest_arr_eq = 1;                                              \
+        size_t _betatest_fail_idx = 0;                                         \
+        for (size_t _i = 0; _i < _betatest_len; ++_i) {                        \
+            if (memcmp(&(a)[_i], &(b)[_i], sizeof((a)[0])) != 0) {             \
+                _betatest_arr_eq = 0;                                          \
+                _betatest_fail_idx = _i;                                       \
+                break;                                                         \
+            }                                                                  \
+        }                                                                      \
+        if (_betatest_arr_eq) {                                                \
+            BETATEST_RECORD_PASS();                                            \
+        } else {                                                               \
+            betatest_stats.last_assertion_failed = 1;                          \
+            if (!betatest_stats.suppress_recording) {                          \
+                betatest_stats.assertions_run++;                               \
+                betatest_stats.assertions_failed++;                            \
+                betatest_stats.current_test_failed = 1;                        \
+            }                                                                  \
+            if (BETATEST_DO_PRINT_FAIL &&                                      \
+                !betatest_stats.suppress_failure_output) {                     \
+                BETATEST_PRINT_FAIL();                                         \
+                printf("%s\n", betatest_stats.current_test_name);              \
+                printf("       Arrays not equal at index %zu\n",               \
+                       _betatest_fail_idx);                                    \
+                if (BETATEST_IS_PRIMITIVE((a)[0])) {                           \
+                    printf("       %s[%zu] = ", #a, _betatest_fail_idx);       \
+                    BETATEST_PRINT_VAL((a)[_betatest_fail_idx]);               \
+                    printf("\n       %s[%zu] = ", #b, _betatest_fail_idx);     \
+                    BETATEST_PRINT_VAL((b)[_betatest_fail_idx]);               \
+                    printf("\n");                                              \
+                } else {                                                       \
+                    char _betatest_name_a[64], _betatest_name_b[64];           \
+                    snprintf(_betatest_name_a, sizeof(_betatest_name_a),       \
+                             "%s[%zu]", #a, _betatest_fail_idx);               \
+                    snprintf(_betatest_name_b, sizeof(_betatest_name_b),       \
+                             "%s[%zu]", #b, _betatest_fail_idx);               \
+                    betatest_print_hex_diff(&(a)[_betatest_fail_idx],          \
+                                            &(b)[_betatest_fail_idx],          \
+                                            sizeof((a)[0]), 0,                 \
+                                            _betatest_name_a, _betatest_name_b);\
+                }                                                              \
+                printf("       at %s:%d\n", __FILE__, __LINE__);               \
+            }                                                                  \
+        }                                                                      \
+    } while (0)
+
+/* Memory equality - compares raw bytes */
+#define ASSERT_MEM_EQ(a, b, size)                                              \
+    do {                                                                       \
+        size_t _betatest_size = (size);                                        \
+        const unsigned char *_betatest_pa = (const unsigned char *)(a);        \
+        const unsigned char *_betatest_pb = (const unsigned char *)(b);        \
+        int _betatest_mem_eq = 1;                                              \
+        size_t _betatest_diff_idx = 0;                                         \
+        for (size_t _i = 0; _i < _betatest_size; ++_i) {                       \
+            if (_betatest_pa[_i] != _betatest_pb[_i]) {                        \
+                _betatest_mem_eq = 0;                                          \
+                _betatest_diff_idx = _i;                                       \
+                break;                                                         \
+            }                                                                  \
+        }                                                                      \
+        if (_betatest_mem_eq) {                                                \
+            BETATEST_RECORD_PASS();                                            \
+        } else {                                                               \
+            betatest_stats.last_assertion_failed = 1;                          \
+            if (!betatest_stats.suppress_recording) {                          \
+                betatest_stats.assertions_run++;                               \
+                betatest_stats.assertions_failed++;                            \
+                betatest_stats.current_test_failed = 1;                        \
+            }                                                                  \
+            if (BETATEST_DO_PRINT_FAIL &&                                      \
+                !betatest_stats.suppress_failure_output) {                     \
+                BETATEST_PRINT_FAIL();                                         \
+                printf("%s\n", betatest_stats.current_test_name);              \
+                printf("       Memory not equal (first diff at byte %zu)\n",   \
+                       _betatest_diff_idx);                                    \
+                betatest_print_hex_diff(_betatest_pa, _betatest_pb,            \
+                                        _betatest_size, _betatest_diff_idx,    \
+                                        #a, #b);                               \
+                printf("       at %s:%d\n", __FILE__, __LINE__);               \
+            }                                                                  \
+        }                                                                      \
+    } while (0)
+
+/* Array contains value */
+#define ASSERT_ARRAY_CONTAINS(arr, len, val)                                   \
+    do {                                                                       \
+        size_t _betatest_len = (len);                                          \
+        typeof(val) _betatest_val = (val);                                     \
+        int _betatest_found = 0;                                               \
+        for (size_t _i = 0; _i < _betatest_len; ++_i) {                        \
+            if (memcmp(&(arr)[_i], &_betatest_val, sizeof(_betatest_val)) == 0) { \
+                _betatest_found = 1;                                           \
+                break;                                                         \
+            }                                                                  \
+        }                                                                      \
+        if (_betatest_found) {                                                 \
+            BETATEST_RECORD_PASS();                                            \
+        } else {                                                               \
+            betatest_stats.last_assertion_failed = 1;                          \
+            if (!betatest_stats.suppress_recording) {                          \
+                betatest_stats.assertions_run++;                               \
+                betatest_stats.assertions_failed++;                            \
+                betatest_stats.current_test_failed = 1;                        \
+            }                                                                  \
+            if (BETATEST_DO_PRINT_FAIL &&                                      \
+                !betatest_stats.suppress_failure_output) {                     \
+                BETATEST_PRINT_FAIL();                                         \
+                printf("%s\n", betatest_stats.current_test_name);              \
+                printf("       Array %s (len %zu) does not contain: ", #arr,   \
+                       _betatest_len);                                         \
+                BETATEST_PRINT_VAL(_betatest_val);                             \
+                printf("\n       at %s:%d\n", __FILE__, __LINE__);             \
+            }                                                                  \
         }                                                                      \
     } while (0)
 
