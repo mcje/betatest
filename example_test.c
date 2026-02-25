@@ -84,6 +84,45 @@ TEST(test_loop_assertions) {
     /* Total: 11 assertions (10 from ASSERT_ONCE + 1 from ASSERT_SINGLE), 6 failed */
 }
 
+/* Demonstrates test skipping */
+TEST(test_skipping) {
+    int has_network = 0;  /* Simulated check */
+    if (!has_network) {
+        SKIP_TEST("Network not available");
+    }
+    /* This code never runs */
+    ASSERT_TRUE(1);
+}
+
+/* Tests for expected failure (xfail) */
+TEST(test_known_bug) {
+    /* This test documents a known bug - expected to fail */
+    ASSERT_INT_EQ(1 + 1, 3);  /* Bug: wrong math! */
+}
+
+TEST(test_fixed_bug) {
+    /* This test was expected to fail but the bug is now fixed */
+    ASSERT_INT_EQ(1 + 1, 2);  /* Bug fixed! */
+}
+
+/* Demonstrates timeout assertion */
+TEST(test_timeout) {
+    /* This completes in time */
+    ASSERT_TIMEOUT(100) {
+        int sum = 0;
+        for (int i = 0; i < 1000; ++i) sum += i;
+        (void)sum;
+    }
+
+    /* This times out */
+    ASSERT_TIMEOUT(50) {
+        while (1) { }  /* Infinite loop */
+    }
+
+    /* This runs after timeout (test continues) */
+    ASSERT_TRUE(1);
+}
+
 /* Demonstrates array assertions */
 TEST(test_array_assertions) {
     int a[] = {1, 2, 3, 4, 5};
@@ -125,6 +164,10 @@ int main(void) {
     RUN_TEST(test_float_equality);
     RUN_TEST(test_with_intentional_failure);
     RUN_TEST(test_loop_assertions);
+    RUN_TEST(test_skipping);
+    RUN_TEST_XFAIL(test_known_bug);
+    RUN_TEST_XFAIL(test_fixed_bug);
+    RUN_TEST(test_timeout);
     RUN_TEST(test_array_assertions);
 
     TEST_SUMMARY();

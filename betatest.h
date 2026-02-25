@@ -3,9 +3,12 @@
 
 #include <math.h>
 #include <regex.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 /* Configuration */
 #ifndef BETATEST_NO_COLOR
@@ -46,6 +49,7 @@
 #define BETATEST_COLOR_RED "\033[31m"
 #define BETATEST_COLOR_YELLOW "\033[33m"
 #define BETATEST_COLOR_CYAN "\033[36m"
+#define BETATEST_COLOR_MAGENTA "\033[35m"
 #define BETATEST_COLOR_DIM "\033[90m"
 #define BETATEST_COLOR_RESET "\033[0m"
 #define BETATEST_COLOR_BOLD "\033[1m"
@@ -55,6 +59,7 @@
 #define BETATEST_COLOR_RED ""
 #define BETATEST_COLOR_YELLOW ""
 #define BETATEST_COLOR_CYAN ""
+#define BETATEST_COLOR_MAGENTA ""
 #define BETATEST_COLOR_DIM ""
 #define BETATEST_HEX_PADDING "??"
 #define BETATEST_COLOR_RESET ""
@@ -66,15 +71,45 @@ static struct {
     int tests_run;
     int tests_passed;
     int tests_failed;
+    int tests_skipped;
+    int tests_xfail;
+    int tests_xpass;
     int assertions_run;
     int assertions_passed;
     int assertions_failed;
     int current_test_failed;
+    int current_test_skipped;
     char *current_test_name;
     int suppress_failure_output;
     int suppress_recording;
     int last_assertion_failed;
-} betatest_stats = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int expecting_failure;
+} betatest_stats = {0};
+
+/* Timeout support */
+static jmp_buf betatest_timeout_jmp;
+static volatile sig_atomic_t betatest_timed_out = 0;
+
+static void betatest_timeout_handler(int sig) {
+    (void)sig;
+    betatest_timed_out = 1;
+    longjmp(betatest_timeout_jmp, 1);
+}
+
+static inline void betatest_timeout_start(int ms) {
+    betatest_timed_out = 0;
+    signal(SIGALRM, betatest_timeout_handler);
+    struct itimerval timer = {0};
+    timer.it_value.tv_sec = ms / 1000;
+    timer.it_value.tv_usec = (ms % 1000) * 1000;
+    setitimer(ITIMER_REAL, &timer, NULL);
+}
+
+static inline void betatest_timeout_stop(void) {
+    struct itimerval timer = {0};
+    setitimer(ITIMER_REAL, &timer, NULL);
+    signal(SIGALRM, SIG_DFL);
+}
 
 /* Print helpers */
 #define BETATEST_PRINT_PASS()                                                  \
@@ -85,6 +120,16 @@ static struct {
 
 #define BETATEST_PRINT_INFO()                                                  \
     printf("%s[INFO]%s ", BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET)
+
+#define BETATEST_PRINT_SKIP()                                                  \
+    printf("%s[SKIP]%s ", BETATEST_COLOR_YELLOW, BETATEST_COLOR_RESET)
+
+#define BETATEST_PRINT_XFAIL()                                                 \
+    printf("%s[XFAIL]%s ", BETATEST_COLOR_DIM, BETATEST_COLOR_RESET)
+
+#define BETATEST_PRINT_XPASS()                                                 \
+    printf("%s%s[XPASS]%s ", BETATEST_COLOR_BOLD, BETATEST_COLOR_MAGENTA,      \
+           BETATEST_COLOR_RESET)
 
 /* Helper functions to print values by pointer (uniform signature for _Generic) */
 static inline void betatest_print_hex(const void *p, size_t size) {
@@ -281,6 +326,9 @@ static inline void betatest_print_str(const void *p, size_t s) {
         betatest_stats.current_test_name = #name;                              \
         betatest_stats.tests_run++;                                            \
         betatest_stats.current_test_failed = 0;                                \
+        betatest_stats.current_test_skipped = 0;                               \
+        int _betatest_xfail = betatest_stats.expecting_failure;                \
+        betatest_stats.expecting_failure = 0;                                  \
         int print_nl = 0;                                                      \
         if (BETATEST_DO_PRINT_TEST) {                                          \
             printf("%s%s[TEST]%s %s%s\n", BETATEST_COLOR_BOLD,                 \
@@ -289,7 +337,21 @@ static inline void betatest_print_str(const void *p, size_t s) {
             print_nl = 1;                                                      \
         }                                                                      \
         test_##name();                                                         \
-        if (betatest_stats.current_test_failed) {                              \
+        if (betatest_stats.current_test_skipped) {                             \
+            betatest_stats.tests_skipped++;                                    \
+        } else if (_betatest_xfail) {                                          \
+            if (betatest_stats.current_test_failed) {                          \
+                betatest_stats.tests_xfail++;                                  \
+                BETATEST_PRINT_XFAIL();                                        \
+                printf("%s (expected)\n", #name);                              \
+                print_nl = 1;                                                  \
+            } else {                                                           \
+                betatest_stats.tests_xpass++;                                  \
+                BETATEST_PRINT_XPASS();                                        \
+                printf("%s (unexpected pass!)\n", #name);                      \
+                print_nl = 1;                                                  \
+            }                                                                  \
+        } else if (betatest_stats.current_test_failed) {                       \
             betatest_stats.tests_failed++;                                     \
         } else {                                                               \
             betatest_stats.tests_passed++;                                     \
@@ -306,6 +368,22 @@ static inline void betatest_print_str(const void *p, size_t s) {
     static void test_##name(void)
 
 #define RUN_TEST(name) run_test_##name()
+
+/* Run a test that is expected to fail */
+#define RUN_TEST_XFAIL(name)                                                   \
+    do {                                                                       \
+        betatest_stats.expecting_failure = 1;                                  \
+        run_test_##name();                                                     \
+    } while (0)
+
+/* Skip current test with a reason */
+#define SKIP_TEST(reason)                                                      \
+    do {                                                                       \
+        betatest_stats.current_test_skipped = 1;                               \
+        BETATEST_PRINT_SKIP();                                                 \
+        printf("%s: %s\n", betatest_stats.current_test_name, reason);          \
+        return;                                                                \
+    } while (0)
 
 /* Assertion helpers */
 #define BETATEST_RECORD_PASS()                                                 \
@@ -695,6 +773,26 @@ static inline void betatest_print_str(const void *p, size_t s) {
         }                                                                      \
     } while (0)
 
+/* Timeout assertion - fails if code block doesn't complete within ms */
+#define ASSERT_TIMEOUT(ms)                                                     \
+    if (setjmp(betatest_timeout_jmp) != 0) {                                   \
+        BETATEST_RECORD_FAIL("Timeout: code did not complete within %d ms",    \
+                             ms);                                              \
+    } else                                                                     \
+        for (int _betatest_timeout_done = (betatest_timeout_start(ms), 0);     \
+             !_betatest_timeout_done;                                          \
+             _betatest_timeout_done = (betatest_timeout_stop(),                \
+                                       betatest_timeout_record_pass(), 1))
+
+static inline int betatest_timeout_record_pass(void) {
+    betatest_stats.last_assertion_failed = 0;
+    if (!betatest_stats.suppress_recording) {
+        betatest_stats.assertions_run++;
+        betatest_stats.assertions_passed++;
+    }
+    return 0;
+}
+
 /* Array equality - compares element by element */
 #define ASSERT_ARRAY_EQ(a, b, len)                                             \
     do {                                                                       \
@@ -875,8 +973,21 @@ static inline void betatest_print_str(const void *p, size_t s) {
         printf("Tests:      %d run, ", betatest_stats.tests_run);              \
         printf("%s%d passed%s, ", BETATEST_COLOR_GREEN,                        \
                betatest_stats.tests_passed, BETATEST_COLOR_RESET);             \
-        printf("%s%d failed%s\n", BETATEST_COLOR_RED,                          \
+        printf("%s%d failed%s", BETATEST_COLOR_RED,                            \
                betatest_stats.tests_failed, BETATEST_COLOR_RESET);             \
+        if (betatest_stats.tests_skipped > 0) {                                \
+            printf(", %s%d skipped%s", BETATEST_COLOR_YELLOW,                  \
+                   betatest_stats.tests_skipped, BETATEST_COLOR_RESET);        \
+        }                                                                      \
+        if (betatest_stats.tests_xfail > 0) {                                  \
+            printf(", %s%d xfail%s", BETATEST_COLOR_DIM,                       \
+                   betatest_stats.tests_xfail, BETATEST_COLOR_RESET);          \
+        }                                                                      \
+        if (betatest_stats.tests_xpass > 0) {                                  \
+            printf(", %s%d xpass%s", BETATEST_COLOR_MAGENTA,                   \
+                   betatest_stats.tests_xpass, BETATEST_COLOR_RESET);          \
+        }                                                                      \
+        printf("\n");                                                          \
         printf("Assertions: %d run, ", betatest_stats.assertions_run);         \
         printf("%s%d passed%s, ", BETATEST_COLOR_GREEN,                        \
                betatest_stats.assertions_passed, BETATEST_COLOR_RESET);        \
@@ -884,7 +995,8 @@ static inline void betatest_print_str(const void *p, size_t s) {
                betatest_stats.assertions_failed, BETATEST_COLOR_RESET);        \
         printf("%s========================================%s\n",               \
                BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET);                     \
-        if (betatest_stats.tests_failed == 0) {                                \
+        if (betatest_stats.tests_failed == 0 &&                                \
+            betatest_stats.tests_xpass == 0) {                                 \
             printf("%s%sALL TESTS PASSED!%s\n", BETATEST_COLOR_BOLD,           \
                    BETATEST_COLOR_GREEN, BETATEST_COLOR_RESET);                \
         } else {                                                               \
@@ -899,7 +1011,8 @@ static inline void betatest_print_str(const void *p, size_t s) {
         memset(&betatest_stats, 0, sizeof(betatest_stats));                    \
     } while (0)
 
-/* Return success/failure code */
-#define TEST_RETURN_CODE() (betatest_stats.tests_failed == 0 ? 0 : 1)
+/* Return success/failure code (xpass counts as failure - test should be updated) */
+#define TEST_RETURN_CODE()                                                     \
+    ((betatest_stats.tests_failed == 0 && betatest_stats.tests_xpass == 0) ? 0 : 1)
 
 #endif /* BETATEST_H */
