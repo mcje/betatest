@@ -69,19 +69,30 @@ TEST(test_with_intentional_failure) {
     ASSERT_TRUE(0); /* This also fails */
 }
 
-/* Demonstrates ASSERT_ONCE and ASSERT_SINGLE in loops */
+/* Demonstrates loop-friendly assertion wrappers */
 TEST(test_loop_assertions) {
-    /* ASSERT_ONCE: prints once, counts all failures (5 failures counted) */
+    /* ASSERT_PRINT_ONCE: each assertion prints once, counts all */
     for (int i = 0; i < 10; ++i) {
-        ASSERT_ONCE(ASSERT_INT_EQ(i % 2, 0));
+        ASSERT_PRINT_ONCE {
+            ASSERT_INT_EQ(i % 2, 0);  /* Prints once, counts 10 (5 fail) */
+        }
     }
 
-    /* ASSERT_SINGLE: prints once, counts as 1 assertion total (1 failure counted) */
+    /* ASSERT_COUNT_ONCE: prints normally, counts as 1 total */
     for (int i = 0; i < 10; ++i) {
-        ASSERT_SINGLE(ASSERT_INT_EQ(i % 2, 0));
+        ASSERT_COUNT_ONCE {
+            ASSERT_INT_EQ(i % 2, 0);  /* Prints all, counts as 1 */
+        }
     }
 
-    /* Total: 11 assertions (10 from ASSERT_ONCE + 1 from ASSERT_SINGLE), 6 failed */
+    /* ASSERT_ONCE: shorthand for both (prints once + counts as 1) */
+    for (int i = 0; i < 10; ++i) {
+        ASSERT_ONCE {
+            ASSERT_INT_EQ(i % 2, 0);  /* Prints once, counts as 1 */
+        }
+    }
+
+    /* Total: 12 assertions (10 + 1 + 1), 7 failed */
 }
 
 /* Demonstrates test skipping */

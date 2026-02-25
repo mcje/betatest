@@ -10,7 +10,7 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 - Detailed failure messages with file and line numbers
 - Test statistics (pass/fail counts)
 - Continues running all tests after failures
-- Loop-friendly assertions with `ASSERT_ONCE` and `ASSERT_SINGLE`
+- Loop-friendly assertions with `ASSERT_PRINT_ONCE`, `ASSERT_COUNT_ONCE`, `ASSERT_ONCE`
 - Array and memory comparison with side-by-side hex diff
 - Test skipping with `SKIP_TEST`
 - Expected failures with `RUN_TEST_XFAIL`
@@ -123,6 +123,7 @@ ASSERT_ARRAY_EQ(a, b, 5);  /* Fails at index 2 */
 ```
 
 Output:
+
 ```
 [FAIL] test_arrays
        Arrays not equal at index 2
@@ -141,6 +142,7 @@ ASSERT_ARRAY_EQ(p1, p2, 2);  /* Fails at index 1 */
 ```
 
 Output:
+
 ```
 [FAIL] test_arrays
        Arrays not equal at index 1
@@ -150,30 +152,44 @@ Output:
 ```
 
 Hex diff features:
+
 - First difference highlighted in red, other differences in yellow
 - Grey `??` padding for alignment when comparing small buffers
 - Configurable max bytes to display (see Configuration)
 
 ### Loop-Friendly Assertions
 
-- `ASSERT_ONCE(assertion)` - Prints first failure only, counts all failures
-- `ASSERT_SINGLE(assertion)` - Prints first failure only, counts as 1 assertion total
+Block-based wrappers for testing in loops. Composable for different behaviors.
 
-When testing in loops, a failing assertion can produce thousands of error messages. These wrappers suppress repeated output:
+- `ASSERT_PRINT_ONCE { }` - Each assertion prints at most once, counts all
+- `ASSERT_COUNT_ONCE { }` - Prints normally, counts as 1 assertion total
+- `ASSERT_ONCE { }` - Shorthand for both (prints once + counts as 1)
 
 ```c
 TEST(test_array_values) {
-    /* ASSERT_ONCE: prints once, counts all failures */
+    /* ASSERT_PRINT_ONCE: prints once per assertion, counts all */
     for (int i = 0; i < 1000; ++i) {
-        ASSERT_ONCE(ASSERT_INT_EQ(array[i], expected[i]));
+        ASSERT_PRINT_ONCE {
+            ASSERT_INT_EQ(array[i], expected[i]);
+        }
     }
-    // 1000 assertions, N failures (however many actually failed)
+    // 1000 assertions, N failures, but only 1 error message
 
-    /* ASSERT_SINGLE: prints once, counts as 1 assertion */
+    /* ASSERT_COUNT_ONCE: prints all failures, counts as 1 */
     for (int i = 0; i < 1000; ++i) {
-        ASSERT_SINGLE(ASSERT_GT(array[i], 0));
+        ASSERT_COUNT_ONCE {
+            ASSERT_GT(array[i], 0);
+        }
     }
-    // 1 assertion, 0 or 1 failure (pass if all pass, fail if any fail)
+    // 1 assertion, 0 or 1 failure, prints all error messages
+
+    /* ASSERT_ONCE: prints once + counts as 1 */
+    for (int i = 0; i < 1000; ++i) {
+        ASSERT_ONCE {
+            ASSERT_LT(array[i], 100);
+        }
+    }
+    // 1 assertion, 0 or 1 failure, only 1 error message
 }
 ```
 
@@ -203,7 +219,7 @@ TEST(test_network) {
 }
 ```
 
-**Important:** If a timeout occurs, execution jumps out of the block immediately via `longjmp`. Any cleanup code *inside* the block will NOT run. Always place cleanup code *after* the `ASSERT_TIMEOUT` block.
+**Important:** If a timeout occurs, execution jumps out of the block immediately via `longjmp`. Any cleanup code _inside_ the block will NOT run. Always place cleanup code _after_ the `ASSERT_TIMEOUT` block.
 
 ### Crash Protection
 
@@ -225,13 +241,14 @@ TEST(test_parser) {
 ```
 
 Output on crash:
+
 ```
 [FAIL] test_parser
        Crash: caught SIGSEGV (segmentation fault)
        at test.c:10
 ```
 
-**Important:** Same as `ASSERT_TIMEOUT` - cleanup code inside the block won't run if a crash occurs. Always place cleanup *after* the block.
+**Important:** Same as `ASSERT_TIMEOUT` - cleanup code inside the block won't run if a crash occurs. Always place cleanup _after_ the block.
 
 ## Test Skipping
 
@@ -319,8 +336,9 @@ int main(void) {
 
 ### Assertion Wrappers
 
-- `ASSERT_ONCE(assertion)` - Prints once, counts all failures
-- `ASSERT_SINGLE(assertion)` - Prints once, counts as 1 pass/fail total
+- `ASSERT_PRINT_ONCE { }` - Each assertion prints once, counts all
+- `ASSERT_COUNT_ONCE { }` - Prints normally, counts as 1 total
+- `ASSERT_ONCE { }` - Prints once + counts as 1 (shorthand for both)
 - `ASSERT_TIMEOUT(ms) { code }` - Fails if code doesn't complete in time
 - `ASSERT_NO_CRASH { code }` - Fails if code crashes (SIGSEGV, SIGBUS, etc.)
 

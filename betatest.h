@@ -49,6 +49,14 @@
 #define BETATEST_DO_TRACK_CRASHES 1
 #endif
 
+#ifndef BETATEST_MAX_ONCE_LOCATIONS
+#define BETATEST_MAX_ONCE_LOCATIONS 256
+#endif
+
+/* Token concatenation helpers */
+#define BETATEST_CAT_(a, b) a##b
+#define BETATEST_CAT(a, b) BETATEST_CAT_(a, b)
+
 /* Color codes */
 #if BETATEST_USE_COLOR
 #define BETATEST_COLOR_GREEN "\033[32m"
@@ -91,7 +99,34 @@ static struct {
     int suppress_recording;
     int last_assertion_failed;
     int expecting_failure;
+    int print_once_mode;
 } betatest_stats = {0};
+
+/* Print-once tracking for ASSERT_PRINT_ONCE
+ * WARNING: Do not nest ASSERT_PRINT_ONCE blocks - behavior is undefined */
+static struct {
+    const char *file;
+    int line;
+} betatest_once_locations[BETATEST_MAX_ONCE_LOCATIONS];
+static int betatest_once_count = 0;
+
+static inline int betatest_once_should_print(const char *file, int line) {
+    if (!betatest_stats.print_once_mode) return 1;
+
+    for (int i = 0; i < betatest_once_count; i++) {
+        if (betatest_once_locations[i].line == line &&
+            betatest_once_locations[i].file == file) {
+            return 0;
+        }
+    }
+
+    if (betatest_once_count < BETATEST_MAX_ONCE_LOCATIONS) {
+        betatest_once_locations[betatest_once_count].file = file;
+        betatest_once_locations[betatest_once_count].line = line;
+        betatest_once_count++;
+    }
+    return 1;
+}
 
 /* Timeout support */
 static jmp_buf betatest_timeout_jmp;
@@ -447,7 +482,8 @@ static inline void betatest_print_str(const void *p, size_t s) {
             betatest_stats.assertions_failed++;                                \
             betatest_stats.current_test_failed = 1;                            \
         }                                                                      \
-        if (BETATEST_DO_PRINT_FAIL && !betatest_stats.suppress_failure_output) {\
+        if (BETATEST_DO_PRINT_FAIL && !betatest_stats.suppress_failure_output &&\
+            betatest_once_should_print(__FILE__, __LINE__)) {                  \
             BETATEST_PRINT_FAIL();                                             \
             printf("%s\n       ", betatest_stats.current_test_name);           \
             printf(msg, ##__VA_ARGS__);                                        \
@@ -995,53 +1031,57 @@ static inline int betatest_crash_record_pass(void) {
         }                                                                      \
     } while (0)
 
-/* Loop-friendly assertion wrapper - prints failure only once per call site */
-#define ASSERT_ONCE(assertion)                                                 \
-    do {                                                                       \
-        static int _betatest_once_printed = 0;                                 \
-        int _betatest_prev_suppress = betatest_stats.suppress_failure_output;  \
-        if (_betatest_once_printed) {                                          \
-            betatest_stats.suppress_failure_output = 1;                        \
-        }                                                                      \
-        assertion;                                                             \
-        if (!_betatest_once_printed && betatest_stats.last_assertion_failed) { \
-            _betatest_once_printed = 1;                                        \
-        }                                                                      \
-        betatest_stats.suppress_failure_output = _betatest_prev_suppress;      \
-    } while (0)
+/* Loop-friendly assertion wrappers (block-based)
+ * WARNING: Do not nest these blocks - behavior is undefined */
 
-/* Loop-friendly assertion wrapper - counts as single assertion, prints once */
-#define ASSERT_SINGLE(assertion)                                               \
-    do {                                                                       \
-        static int _betatest_single_recorded = 0;                              \
-        static int _betatest_single_failed = 0;                                \
-        int _betatest_prev_suppress_rec = betatest_stats.suppress_recording;   \
-        int _betatest_prev_suppress_out = betatest_stats.suppress_failure_output; \
-        betatest_stats.suppress_recording = 1;                                 \
-        if (_betatest_single_failed) {                                         \
-            betatest_stats.suppress_failure_output = 1;                        \
-        }                                                                      \
-        assertion;                                                             \
-        betatest_stats.suppress_recording = _betatest_prev_suppress_rec;       \
-        betatest_stats.suppress_failure_output = _betatest_prev_suppress_out;  \
-        if (!_betatest_single_recorded) {                                      \
-            _betatest_single_recorded = 1;                                     \
-            betatest_stats.assertions_run++;                                   \
-            if (betatest_stats.last_assertion_failed) {                        \
-                _betatest_single_failed = 1;                                   \
-                betatest_stats.assertions_failed++;                            \
-                betatest_stats.current_test_failed = 1;                        \
-            } else {                                                           \
-                betatest_stats.assertions_passed++;                            \
-            }                                                                  \
-        } else if (!_betatest_single_failed &&                                 \
-                   betatest_stats.last_assertion_failed) {                     \
-            _betatest_single_failed = 1;                                       \
-            betatest_stats.assertions_passed--;                                \
-            betatest_stats.assertions_failed++;                                \
-            betatest_stats.current_test_failed = 1;                            \
-        }                                                                      \
-    } while (0)
+/* ASSERT_PRINT_ONCE: Each assertion prints at most once (still counts all) */
+#define ASSERT_PRINT_ONCE                                                      \
+    for (int _betatest_po = (betatest_stats.print_once_mode = 1, 1);           \
+         _betatest_po;                                                         \
+         _betatest_po = (betatest_stats.print_once_mode = 0, 0))
+
+/* ASSERT_COUNT_ONCE: All assertions count as 1 total (prints normally) */
+#define ASSERT_COUNT_ONCE                                                      \
+    static int BETATEST_CAT(_betatest_co_done_, __LINE__) = 0;                 \
+    static int BETATEST_CAT(_betatest_co_failed_, __LINE__) = 0;               \
+    for (int _betatest_co = (betatest_stats.suppress_recording = 1, 1);        \
+         _betatest_co;                                                         \
+         _betatest_co = (betatest_count_once_cleanup(                          \
+             &BETATEST_CAT(_betatest_co_done_, __LINE__),                       \
+             &BETATEST_CAT(_betatest_co_failed_, __LINE__)), 0))
+
+static inline int betatest_count_once_cleanup(int *done, int *failed) {
+    betatest_stats.suppress_recording = 0;
+    if (!*done) {
+        *done = 1;
+        betatest_stats.assertions_run++;
+        if (betatest_stats.last_assertion_failed) {
+            *failed = 1;
+            betatest_stats.assertions_failed++;
+            betatest_stats.current_test_failed = 1;
+        } else {
+            betatest_stats.assertions_passed++;
+        }
+    } else if (!*failed && betatest_stats.last_assertion_failed) {
+        *failed = 1;
+        betatest_stats.assertions_passed--;
+        betatest_stats.assertions_failed++;
+        betatest_stats.current_test_failed = 1;
+    }
+    return 0;
+}
+
+/* ASSERT_ONCE: Shorthand for ASSERT_PRINT_ONCE + ASSERT_COUNT_ONCE */
+#define ASSERT_ONCE                                                            \
+    static int BETATEST_CAT(_betatest_once_done_, __LINE__) = 0;               \
+    static int BETATEST_CAT(_betatest_once_failed_, __LINE__) = 0;             \
+    for (int _betatest_once = (betatest_stats.print_once_mode = 1,             \
+                               betatest_stats.suppress_recording = 1, 1);      \
+         _betatest_once;                                                       \
+         _betatest_once = (betatest_stats.print_once_mode = 0,                 \
+                           betatest_count_once_cleanup(                        \
+                               &BETATEST_CAT(_betatest_once_done_, __LINE__),  \
+                               &BETATEST_CAT(_betatest_once_failed_, __LINE__)), 0))
 
 /* Summary and reset */
 #define TEST_SUMMARY()                                                         \
