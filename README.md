@@ -15,6 +15,7 @@ BetaTest is a simple, macro-based unit testing framework for C that provides a c
 - Test skipping with `SKIP_TEST`
 - Expected failures with `RUN_TEST_XFAIL`
 - Timeout protection with `ASSERT_TIMEOUT`
+- Crash protection with `ASSERT_NO_CRASH`
 - Single-header library
 
 ## Quick Start
@@ -113,28 +114,43 @@ gcc -o test example_test.c -lm
 - `ASSERT_MEM_EQ(a, b, size)` - Assert memory regions are equal byte-by-byte
 - `ASSERT_ARRAY_CONTAINS(arr, len, value)` - Assert array contains a value
 
-These assertions show a side-by-side hex diff on failure:
+For primitives, values are printed directly:
 
 ```c
-TEST(test_arrays) {
-    int a[] = {1, 2, 3, 4, 5};
-    int b[] = {1, 2, 9, 4, 5};
-    ASSERT_ARRAY_EQ(a, b, 5);  /* Fails at index 2 */
-}
+int a[] = {1, 2, 3, 4, 5};
+int b[] = {1, 2, 9, 4, 5};
+ASSERT_ARRAY_EQ(a, b, 5);  /* Fails at index 2 */
 ```
 
 Output:
 ```
 [FAIL] test_arrays
        Arrays not equal at index 2
-       Offset: a[2]                     | b[2]
-       0x0000: 03 00 00 00              | 09 00 00 00
+       a[2] = 3
+       b[2] = 9
        at test.c:5
 ```
 
-Features:
+For structs/unknown types, a side-by-side hex diff is shown:
+
+```c
+struct point { int x; int y; };
+struct point p1[] = {{1, 2}, {3, 4}};
+struct point p2[] = {{1, 2}, {5, 6}};
+ASSERT_ARRAY_EQ(p1, p2, 2);  /* Fails at index 1 */
+```
+
+Output:
+```
+[FAIL] test_arrays
+       Arrays not equal at index 1
+       Offset: p1[1]                    | p2[1]
+       0x0000: 03 00 00 00 04 00 00 00  | 05 00 00 00 06 00 00 00
+       at test.c:5
+```
+
+Hex diff features:
 - First difference highlighted in red, other differences in yellow
-- Works with primitives (shows hex of value) and structs (shows full hex dump)
 - Grey `??` padding for alignment when comparing small buffers
 - Configurable max bytes to display (see Configuration)
 
@@ -188,6 +204,34 @@ TEST(test_network) {
 ```
 
 **Important:** If a timeout occurs, execution jumps out of the block immediately via `longjmp`. Any cleanup code *inside* the block will NOT run. Always place cleanup code *after* the `ASSERT_TIMEOUT` block.
+
+### Crash Protection
+
+- `ASSERT_NO_CRASH { code }` - Fail if code block crashes
+
+Catches signals: SIGSEGV, SIGBUS, SIGFPE, SIGABRT, SIGILL
+
+```c
+TEST(test_parser) {
+    char *buf = malloc(1024);
+
+    ASSERT_NO_CRASH {
+        parse(untrusted_input);  /* Might segfault */
+    }
+
+    /* Cleanup runs whether crash occurred or not */
+    free(buf);
+}
+```
+
+Output on crash:
+```
+[FAIL] test_parser
+       Crash: caught SIGSEGV (segmentation fault)
+       at test.c:10
+```
+
+**Important:** Same as `ASSERT_TIMEOUT` - cleanup code inside the block won't run if a crash occurs. Always place cleanup *after* the block.
 
 ## Test Skipping
 
@@ -278,6 +322,7 @@ int main(void) {
 - `ASSERT_ONCE(assertion)` - Prints once, counts all failures
 - `ASSERT_SINGLE(assertion)` - Prints once, counts as 1 pass/fail total
 - `ASSERT_TIMEOUT(ms) { code }` - Fails if code doesn't complete in time
+- `ASSERT_NO_CRASH { code }` - Fails if code crashes (SIGSEGV, SIGBUS, etc.)
 
 ### Configuration
 
@@ -289,6 +334,7 @@ You can define certain FLAGS to change behaviour before including the header fil
 - `BETATEST_PRINT_ON_TEST` - Print the test name when starting (useful if test hangs)
 - `BETATEST_PRINT_ON_PASS` - Print the test name on pass
 - `BETATEST_PRINT_NOT_ON_FAIL` - Suppress output on failure
+- `BETATEST_TRACK_CRASHES` - Show crash count separately in summary (e.g., `17 failed (1 crashed)`)
 
 #### Hex Dump Settings
 

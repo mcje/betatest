@@ -43,6 +43,12 @@
 #define BETATEST_DO_PRINT_FAIL 0
 #endif
 
+#ifndef BETATEST_TRACK_CRASHES
+#define BETATEST_DO_TRACK_CRASHES 0
+#else
+#define BETATEST_DO_TRACK_CRASHES 1
+#endif
+
 /* Color codes */
 #if BETATEST_USE_COLOR
 #define BETATEST_COLOR_GREEN "\033[32m"
@@ -77,6 +83,7 @@ static struct {
     int assertions_run;
     int assertions_passed;
     int assertions_failed;
+    int assertions_crashed;
     int current_test_failed;
     int current_test_skipped;
     char *current_test_name;
@@ -109,6 +116,43 @@ static inline void betatest_timeout_stop(void) {
     struct itimerval timer = {0};
     setitimer(ITIMER_REAL, &timer, NULL);
     signal(SIGALRM, SIG_DFL);
+}
+
+/* Crash/signal handling support */
+static jmp_buf betatest_crash_jmp;
+static volatile sig_atomic_t betatest_crash_sig = 0;
+
+static const char *betatest_signal_name(int sig) {
+    switch (sig) {
+        case SIGSEGV: return "SIGSEGV (segmentation fault)";
+        case SIGBUS:  return "SIGBUS (bus error)";
+        case SIGFPE:  return "SIGFPE (floating point exception)";
+        case SIGABRT: return "SIGABRT (abort)";
+        case SIGILL:  return "SIGILL (illegal instruction)";
+        default:      return "unknown signal";
+    }
+}
+
+static void betatest_crash_handler(int sig) {
+    betatest_crash_sig = sig;
+    longjmp(betatest_crash_jmp, 1);
+}
+
+static inline void betatest_crash_protect_start(void) {
+    betatest_crash_sig = 0;
+    signal(SIGSEGV, betatest_crash_handler);
+    signal(SIGBUS, betatest_crash_handler);
+    signal(SIGFPE, betatest_crash_handler);
+    signal(SIGABRT, betatest_crash_handler);
+    signal(SIGILL, betatest_crash_handler);
+}
+
+static inline void betatest_crash_protect_stop(void) {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+    signal(SIGFPE, SIG_DFL);
+    signal(SIGABRT, SIG_DFL);
+    signal(SIGILL, SIG_DFL);
 }
 
 /* Print helpers */
@@ -793,6 +837,43 @@ static inline int betatest_timeout_record_pass(void) {
     return 0;
 }
 
+/* Crash protection assertion - fails if code block crashes */
+#define ASSERT_NO_CRASH                                                        \
+    if (setjmp(betatest_crash_jmp) != 0) {                                     \
+        betatest_crash_protect_stop();                                         \
+        betatest_crash_record_fail(betatest_crash_sig, __FILE__, __LINE__);    \
+    } else                                                                     \
+        for (int _betatest_crash_done = (betatest_crash_protect_start(), 0);   \
+             !_betatest_crash_done;                                            \
+             _betatest_crash_done = (betatest_crash_protect_stop(),            \
+                                     betatest_crash_record_pass(), 1))
+
+static inline void betatest_crash_record_fail(int sig, const char *file,
+                                              int line) {
+    betatest_stats.last_assertion_failed = 1;
+    if (!betatest_stats.suppress_recording) {
+        betatest_stats.assertions_run++;
+        betatest_stats.assertions_failed++;
+        betatest_stats.assertions_crashed++;
+        betatest_stats.current_test_failed = 1;
+    }
+    if (BETATEST_DO_PRINT_FAIL && !betatest_stats.suppress_failure_output) {
+        BETATEST_PRINT_FAIL();
+        printf("%s\n", betatest_stats.current_test_name);
+        printf("       Crash: caught %s\n", betatest_signal_name(sig));
+        printf("       at %s:%d\n", file, line);
+    }
+}
+
+static inline int betatest_crash_record_pass(void) {
+    betatest_stats.last_assertion_failed = 0;
+    if (!betatest_stats.suppress_recording) {
+        betatest_stats.assertions_run++;
+        betatest_stats.assertions_passed++;
+    }
+    return 0;
+}
+
 /* Array equality - compares element by element */
 #define ASSERT_ARRAY_EQ(a, b, len)                                             \
     do {                                                                       \
@@ -991,8 +1072,13 @@ static inline int betatest_timeout_record_pass(void) {
         printf("Assertions: %d run, ", betatest_stats.assertions_run);         \
         printf("%s%d passed%s, ", BETATEST_COLOR_GREEN,                        \
                betatest_stats.assertions_passed, BETATEST_COLOR_RESET);        \
-        printf("%s%d failed%s\n", BETATEST_COLOR_RED,                          \
+        printf("%s%d failed%s", BETATEST_COLOR_RED,                            \
                betatest_stats.assertions_failed, BETATEST_COLOR_RESET);        \
+        if (BETATEST_DO_TRACK_CRASHES && betatest_stats.assertions_crashed > 0) { \
+            printf(" (%s%d crashed%s)", BETATEST_COLOR_BOLD,                   \
+                   betatest_stats.assertions_crashed, BETATEST_COLOR_RESET);   \
+        }                                                                      \
+        printf("\n");                                                          \
         printf("%s========================================%s\n",               \
                BETATEST_COLOR_CYAN, BETATEST_COLOR_RESET);                     \
         if (betatest_stats.tests_failed == 0 &&                                \

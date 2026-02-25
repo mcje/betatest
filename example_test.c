@@ -86,7 +86,7 @@ TEST(test_loop_assertions) {
 
 /* Demonstrates test skipping */
 TEST(test_skipping) {
-    int has_network = 0;  /* Simulated check */
+    int has_network = 0; /* Simulated check */
     if (!has_network) {
         SKIP_TEST("Network not available");
     }
@@ -97,12 +97,12 @@ TEST(test_skipping) {
 /* Tests for expected failure (xfail) */
 TEST(test_known_bug) {
     /* This test documents a known bug - expected to fail */
-    ASSERT_INT_EQ(1 + 1, 3);  /* Bug: wrong math! */
+    ASSERT_INT_EQ(1 + 1, 3); /* Bug: wrong math! */
 }
 
 TEST(test_fixed_bug) {
     /* This test was expected to fail but the bug is now fixed */
-    ASSERT_INT_EQ(1 + 1, 2);  /* Bug fixed! */
+    ASSERT_INT_EQ(1 + 1, 2); /* Bug fixed! */
 }
 
 /* Demonstrates timeout assertion */
@@ -116,10 +116,24 @@ TEST(test_timeout) {
 
     /* This times out */
     ASSERT_TIMEOUT(50) {
-        while (1) { }  /* Infinite loop */
+        while (1) {
+        } /* Infinite loop */
     }
 
     /* This runs after timeout (test continues) */
+    ASSERT_TRUE(1);
+}
+
+/* Demonstrates crash protection */
+TEST(test_crash_protection) {
+    int* ptr = NULL;
+
+    /* This would normally crash the program */
+    ASSERT_NO_CRASH {
+        *ptr = 42; /* Segfault! */
+    }
+
+    /* Test continues after catching the crash */
     ASSERT_TRUE(1);
 }
 
@@ -143,7 +157,10 @@ TEST(test_array_assertions) {
     ASSERT_MEM_EQ(mem1, mem3, 3); /* fail at byte 1 */
 
     /* Struct array - shows hex dump for unknown types */
-    struct point { int x; int y; };
+    struct point {
+        int x;
+        int y;
+    };
     struct point p1[] = {{1, 2}, {3, 4}};
     struct point p2[] = {{1, 2}, {3, 4}};
     struct point p3[] = {{1, 2}, {5, 6}};
@@ -168,6 +185,7 @@ int main(void) {
     RUN_TEST_XFAIL(test_known_bug);
     RUN_TEST_XFAIL(test_fixed_bug);
     RUN_TEST(test_timeout);
+    RUN_TEST(test_crash_protection);
     RUN_TEST(test_array_assertions);
 
     TEST_SUMMARY();
